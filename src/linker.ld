@@ -39,6 +39,11 @@ SECTIONS
     ebss = .;
     ekernel = .;
 
+    . = ALIGN(4K);
+    .user : {
+      *(.user)
+    }
+
     /DISCARD/ : {
         *(.eh_frame)
     }

@@ -10,7 +10,6 @@ pub const SHUTDOWN : usize = 8;
 
 pub fn sbi_call(which: usize, args:[usize; 3]) -> usize {
     let mut ret;
-    /*
     unsafe {
         llvm_asm!("ecall"
                  : "={x10}" (ret)
@@ -20,13 +19,14 @@ pub fn sbi_call(which: usize, args:[usize; 3]) -> usize {
                  : "volatile"
          );
     }
-    */
+    /*
     unsafe {
         asm!("ecall", in("x10") args[0],
             in("x11") args[1],
             in("x17") args[2]);
         asm!("", out("x10") ret);
     }
+    */
     ret
 }
 
