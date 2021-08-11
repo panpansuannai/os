@@ -150,16 +150,4 @@ pub fn init(){
             break;
         }
     }
-    //stack_dst.copy_from_slice(sp_ori);
-    /*
-    let mut offset: usize = 0;
-    unsafe { 
-        asm!("mv {0}, sp",
-        "sub {0}, {0}, {1}", 
-        "add sp, {0}, {2}",
-        inout(reg) offset, 
-        in(reg) boot_stack as usize, 
-        in(reg) KERNEL_STACK.data.as_ptr() as usize);
-    }
-    */
 }

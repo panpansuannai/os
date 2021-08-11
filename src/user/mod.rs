@@ -12,13 +12,10 @@ pub static ref APP_START : [(usize, usize); APP_NUM] =
 fn syscall(id: usize, args: [usize; 3]) -> usize{
     let mut ret :usize ;
     unsafe {
-        llvm_asm!("ecall"
-                 : "={x10}" (ret)
-                 : "{x10}" (args[0]), "{x11}" (args[1]), "{x12}" (args[2]), 
-                   "{x17}" (id)
-                 : "memory"
-                 : "volatile"
-         );
+        asm!("ecall", inout("x10") args[0] => ret,
+            in("x11") args[1],
+            in("x12") args[2],
+            in("x17") id);
     }
     ret
 }
