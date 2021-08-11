@@ -1,14 +1,17 @@
 use core::fmt::{self, Write};
 use crate::sbi;
 
+static KERNEL_LOG: bool = true;
 struct Stdout;
 
 impl Write for Stdout {
     fn write_str(&mut self, s : &str) -> fmt::Result {
-        for c in s.chars() {
-            sbi::sbi_call(sbi::PUT_CHAR, [c as usize, 0, 0]);
+        if KERNEL_LOG {
+            for c in s.chars() {
+                sbi::sbi_call(sbi::PUT_CHAR, [c as usize, 0, 0]);
+            }
         }
-    Ok(())
+        Ok(())
     }
 }
 

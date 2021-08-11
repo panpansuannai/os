@@ -8,13 +8,14 @@ use crate::trap::{
 
 const USER_STACK_SIZE: usize = 4096 * 2;
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
-static KERNEL_STACK: KernelStack = KernelStack { data: [0; KERNEL_STACK_SIZE] };
-static USER_STACK: UserStack = UserStack { data: [0; USER_STACK_SIZE] };
+pub static KERNEL_STACK: KernelStack = KernelStack { data: [0; KERNEL_STACK_SIZE] };
+pub static USER_STACK0: UserStack = UserStack { data: [0; USER_STACK_SIZE] };
+pub static USER_STACK1: UserStack = UserStack { data: [0; USER_STACK_SIZE] };
 
 pub const APP_BASE_ADDR : usize = 0x80300000;
 
 #[repr(align(4096))]
-struct KernelStack {
+pub struct KernelStack {
     data: [u8; KERNEL_STACK_SIZE],
 }
 
@@ -23,7 +24,7 @@ impl KernelStack {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
 
-    fn push_context(&self, cx: TrapContext) -> &mut TrapContext {
+    pub fn push_context(&self, cx: TrapContext) -> &mut TrapContext {
         println!("[kernel] Pushing context");
         let cx_ptr = (self.get_sp() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
         unsafe { *cx_ptr = cx; }
@@ -32,12 +33,12 @@ impl KernelStack {
 }
 
 #[repr(align(4096))]
-struct UserStack {
+pub struct UserStack {
     data: [u8; USER_STACK_SIZE],
 }
 
 impl UserStack {
-    fn get_sp(&self) -> usize {
+    pub fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
 }
@@ -62,7 +63,7 @@ impl AppManagerInner {
         crate::trap::_restore(KERNEL_STACK.push_context(
                     TrapContext::app_init_context(
                         self.app_start_addr(app_id).unwrap(),
-                        USER_STACK.get_sp(), 
+                        USER_STACK0.get_sp(), 
                         0, KERNEL_STACK.get_sp(), 0)) 
                         as *const TrapContext as usize);
     }
@@ -96,7 +97,7 @@ impl AppManagerInner {
     pub fn app_start_addr(&self, app_id: usize) -> Option<usize> {
         match app_id {
             0..=crate::user::APP_NUM => {
-                Some(self.app_start[self.current_app].0)
+                Some(self.app_start[app_id].0)
             },
             _ => {
                 None
@@ -130,6 +131,35 @@ pub static ref APP_MANAGER : AppManager = AppManager {
 }
 
 pub fn init(){
-    let stack = KERNEL_STACK.data.as_ptr() as usize + KERNEL_STACK_SIZE - 1;
-    //unsafe { asm!("addi sp, {0}, 0", in(reg) stack); }
+    return ;
+    use crate::map_sym::{boot_stack, boot_stack_top};
+    let stack_len = boot_stack_top as usize - boot_stack as usize;
+
+    let stack_dst = unsafe { 
+        core::slice::from_raw_parts_mut(
+            KERNEL_STACK.data.as_ptr() as *mut u8, stack_len)
+    };
+
+    let sp_ori = unsafe {
+        core::slice::from_raw_parts(boot_stack as *const u8, stack_len)};
+    let mut j = 10;
+    for i in sp_ori.iter() {
+        j -= 1;
+        println!("{}", *i);
+        if j <= 0 {
+            break;
+        }
+    }
+    //stack_dst.copy_from_slice(sp_ori);
+    /*
+    let mut offset: usize = 0;
+    unsafe { 
+        asm!("mv {0}, sp",
+        "sub {0}, {0}, {1}", 
+        "add sp, {0}, {2}",
+        inout(reg) offset, 
+        in(reg) boot_stack as usize, 
+        in(reg) KERNEL_STACK.data.as_ptr() as usize);
+    }
+    */
 }

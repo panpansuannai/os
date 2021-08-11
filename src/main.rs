@@ -2,6 +2,7 @@
 #![no_std]
 // [no_main] Tell compiler we don't need initialization before main() #![no_main]
 #![no_main]
+#![feature(naked_functions)]
 #![feature(llvm_asm)]
 #![feature(asm)]
 // [global_asm] allow include an assemble file
@@ -23,6 +24,7 @@ mod entry;
 mod user;
 mod syscall;
 mod batch;
+mod task;
 
 #[macro_use]
 extern crate lazy_static;
@@ -41,6 +43,7 @@ extern "C" fn kernel_start() {
     use batch::APP_MANAGER;
     use trap::context::TrapContext;
     use riscv::register::sstatus::SPP;
+    use task::TASK_MANAGER;
 
     clear_bss();
     println!("[kernel] Clear bss");
@@ -48,33 +51,6 @@ extern "C" fn kernel_start() {
     println!("[kernel] Init trap");
     batch::init();
     println!("[kernel] Init batch");
-    let satp = riscv::register::satp::read();
-    use riscv::register::satp::Mode;
-    match satp.mode() {
-        Mode::Bare => {
-            println!("[kernel] satp mode : Bare");
-        },
-        Mode::Sv48 => {
-            println!("[kernel] satp mode : Sv48");
-        },
-        Mode::Sv57 => {
-            println!("[kernel] satp mode : Sv57");
-        },
-        Mode::Sv64 => {
-            println!("[kernel] satp mode : Sv64");
-        },
-        Mode::Sv39 => {
-            println!("[kernel] satp mode : Sv39");
-        },
-    }
-    match riscv::register::sstatus::read().spp() {
-        SPP::Supervisor => {
-            println!("[kernel] SuperVisor");
-        },
-        SPP::User => {
-            println!("[kernel] User");
-        }
-    }
 
     log!(info ".text [{:#x}, {:#x})", 
         map_sym::stext as usize, map_sym::etext as usize);
@@ -85,6 +61,20 @@ extern "C" fn kernel_start() {
 
     // Run user space application
     let mut app_manager = APP_MANAGER.inner.borrow();
-    app_manager.run_app(0);
+
+    let context0 = TrapContext::app_init_context(
+        app_manager.app_start_addr(0).unwrap(),
+        batch::USER_STACK0.get_sp(), 0, 0, 0);
+
+    let context1 = TrapContext::app_init_context(
+        app_manager.app_start_addr(1).unwrap(),
+        batch::USER_STACK1.get_sp(), 0, 0, 0);
+
+    println!("[kernle] Loading apps as tasks");
+    TASK_MANAGER.load_task(&context0);
+    TASK_MANAGER.load_task(&context1);
+    trap::enable_timer_interupt();
+    trap::time::set_next_trigger();
+    TASK_MANAGER.start_next_task();
     panic!("Shut down"); 
 }

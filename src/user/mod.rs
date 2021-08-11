@@ -1,14 +1,12 @@
-pub mod hello_world;
+mod hello_world;
+mod play;
 
 pub const APP_NUM: usize = 3;
 
-extern "C" {
-    fn hello_world_end(); 
-}
-
 lazy_static!{
 pub static ref APP_START : [(usize, usize); APP_NUM] = 
-    [(hello_world::main as *const () as usize, hello_world::main as usize + 2048) , (0, 0), (0, 0)];
+    [(hello_world::main as *const () as usize, hello_world::main as usize + 2048), (play::main as *const () as usize, play::main as usize + 2048), (0, 0)
+    ];
 }
 
 fn syscall(id: usize, args: [usize; 3]) -> usize{
