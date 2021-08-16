@@ -12,37 +12,38 @@ SECTIONS
         *(.text.entry)
         *(.text .text.*)
     }
+    etext = .;
 
     . = ALIGN(4K);
-    etext = .;
     srodata = .;
     .rodata : {
         *(.rodata .rodata.*)
     }
+    erodata = .;
 
     . = ALIGN(4K);
-    erodata = .;
     sdata = .;
     .data : {
         *(.data .data.*)
     }
+    edata = .;
 
     . = ALIGN(4K);
-    edata = .;
+    sbss = .;
     .bss : {
         *(.bss.stack)
         sbss = .;
         *(.bss .bss.*)
     }
-
-    . = ALIGN(4K);
     ebss = .;
     ekernel = .;
 
     . = ALIGN(4K);
+    suser = .;
     .user : {
       *(.user)
     }
+    euser = .;
 
     /DISCARD/ : {
         *(.eh_frame)

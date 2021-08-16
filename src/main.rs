@@ -10,6 +10,7 @@
 #![feature(panic_info_message)]
 #![feature(const_raw_ptr_to_usize_cast)]
 #![feature(fn_align)]
+#![feature(alloc_error_handler)]
 
 #[macro_use]
 mod lang_items;
@@ -25,9 +26,16 @@ mod user;
 mod syscall;
 mod batch;
 mod task;
+mod heap;
+mod mm;
 
 #[macro_use]
 extern crate lazy_static;
+extern crate alloc;
+extern crate buddy_system_allocator;
+extern crate spin;
+#[macro_use]
+extern crate bitflags;
 
 /// Clear .bss section
 fn clear_bss() {
@@ -42,11 +50,19 @@ fn clear_bss() {
 extern "C" fn kernel_start() {
     use batch::APP_MANAGER;
     use trap::context::TrapContext;
-    use riscv::register::sstatus::SPP;
     use task::TASK_MANAGER;
-
+    use mm::memory_space::MemorySpace;
+    
+    // Use new stack
+    unsafe { 
+        asm!("mv sp, {0}",
+         in(reg) batch::KERNEL_STACK.get_sp());
+    }
+    mm::init();
     clear_bss();
     println!("[kernel] Clear bss");
+    heap::init();
+    println!("[kernel] Init heap");
     trap::init();
     println!("[kernel] Init trap");
     batch::init();
@@ -61,20 +77,22 @@ extern "C" fn kernel_start() {
 
     // Run user space application
     let mut app_manager = APP_MANAGER.inner.borrow();
+    println!("[kernel] Load user address space");
+    let virtual_space = unsafe { 
+        MemorySpace::from_elf(core::slice::from_raw_parts(
+                user::APP_START[0].0 as *const u8,
+                user::APP_START[0].1 - user::APP_START[0].0));
+    };
+    println!("[kernel] Load user address space");
 
     let context0 = TrapContext::app_init_context(
         app_manager.app_start_addr(0).unwrap(),
         batch::USER_STACK0.get_sp(), 0, 0, 0);
 
-    let context1 = TrapContext::app_init_context(
-        app_manager.app_start_addr(1).unwrap(),
-        batch::USER_STACK1.get_sp(), 0, 0, 0);
-
     println!("[kernle] Loading apps as tasks");
     TASK_MANAGER.load_task(&context0);
-    TASK_MANAGER.load_task(&context1);
-    trap::enable_timer_interupt();
-    trap::time::set_next_trigger();
+    //trap::enable_timer_interupt();
+    //trap::time::set_next_trigger();
     TASK_MANAGER.start_next_task();
     panic!("Shut down"); 
 }

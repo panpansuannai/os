@@ -10,6 +10,8 @@ extern "C" {
     pub fn etext();
     pub fn sbss();
     pub fn ebss();
-    pub fn boot_stack_top();
-    pub fn boot_stack();
+    pub fn suser();
+    pub fn euser();
+    pub fn skernel();
+    pub fn ekernel();
 }

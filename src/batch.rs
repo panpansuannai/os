@@ -1,15 +1,14 @@
 use core::cell::RefCell;
 use core::marker::Sync;
-use crate::trap::{
-    context::TrapContext,
-    self
-};
+use crate::trap::context::TrapContext;
 
 
 const USER_STACK_SIZE: usize = 4096 * 2;
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
 pub static KERNEL_STACK: KernelStack = KernelStack { data: [0; KERNEL_STACK_SIZE] };
+#[link_section = ".user"]
 pub static USER_STACK0: UserStack = UserStack { data: [0; USER_STACK_SIZE] };
+#[link_section = ".user"]
 pub static USER_STACK1: UserStack = UserStack { data: [0; USER_STACK_SIZE] };
 
 pub const APP_BASE_ADDR : usize = 0x80300000;
@@ -20,7 +19,7 @@ pub struct KernelStack {
 }
 
 impl KernelStack {
-    fn get_sp(&self) -> usize {
+    pub fn get_sp(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
     }
 
@@ -131,23 +130,4 @@ pub static ref APP_MANAGER : AppManager = AppManager {
 }
 
 pub fn init(){
-    return ;
-    use crate::map_sym::{boot_stack, boot_stack_top};
-    let stack_len = boot_stack_top as usize - boot_stack as usize;
-
-    let stack_dst = unsafe { 
-        core::slice::from_raw_parts_mut(
-            KERNEL_STACK.data.as_ptr() as *mut u8, stack_len)
-    };
-
-    let sp_ori = unsafe {
-        core::slice::from_raw_parts(boot_stack as *const u8, stack_len)};
-    let mut j = 10;
-    for i in sp_ori.iter() {
-        j -= 1;
-        println!("{}", *i);
-        if j <= 0 {
-            break;
-        }
-    }
 }

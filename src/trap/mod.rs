@@ -16,7 +16,6 @@ use riscv::register::{
 
 use context::TrapContext;
 
-global_asm!(include_str!("traps.s"));
 extern "C" { pub fn __alltraps(); }
 extern "C" { pub fn __restore(cx: usize); }
 
@@ -25,6 +24,7 @@ pub fn _restore(cx: usize){
     unsafe { __restore(cx); }
 }
 
+global_asm!(include_str!("traps.s"));
 pub fn init() { 
     unsafe {
         stvec::write(__alltraps as usize, TrapMode::Direct);
@@ -56,10 +56,10 @@ pub extern "C" fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext{
         }
         Trap::Exception(Exception::StoreFault) |
         Trap::Exception(Exception::StorePageFault) => {
-            panic!("[kernel] PageFault in application, core dumped. sepc:0x{:X}", cx.sepc);
+            panic!("PageFault in application, core dumped. sepc:0x{:x}", cx.sepc);
         }
         Trap::Exception(Exception::IllegalInstruction) => {
-            panic!("[kernel] IllegalInstruction in application, core dumped. sepc:0x{:X}", cx.sepc);
+            panic!(" IllegalInstruction in application, core dumped. sepc:0x{:X}", cx.sepc);
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             crate::trap::time::set_next_trigger();
@@ -67,7 +67,8 @@ pub extern "C" fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext{
                     [cx as *const TrapContext as usize, 0, 0]) as usize;
         }
         _ => {
-            panic!("Unsupported trap {:?}, stval = {:#x}!", scause.cause(), stval);
+            panic!("Unsupported trap {:?}:0x{:x}, stval = {:#x}!",
+                   scause.cause(), scause.bits(), stval);
         }
     }
     cx

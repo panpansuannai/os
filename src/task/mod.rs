@@ -61,7 +61,7 @@ impl TaskManager {
     }
 
     pub fn load_task(&self, cx: &TrapContext) {
-        println!("[kernel] Loading task for TrapContext: 0x{:x} -> 0x{:x}",
+        println!("[kernel] Loading task for TrapContext: 0x{:x} -> sepc: 0x{:x}",
                  cx as *const TrapContext as usize, cx.sepc);
         let mut inner = self.inner.borrow_mut();
         let mut empty = 0;
