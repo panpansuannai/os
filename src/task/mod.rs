@@ -13,6 +13,13 @@ pub struct TaskManagerInner {
     current_task: usize
 }
 
+#[repr(C)]
+pub struct KernelTask {
+    pub stack: usize,
+    pub satp: usize,
+    pub user_stack: usize
+}
+
 unsafe impl Sync for TaskManager {}
 lazy_static!{
 pub static ref TASK_MANAGER: TaskManager = TaskManager {

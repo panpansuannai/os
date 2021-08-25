@@ -8,17 +8,33 @@ use crate::map_sym::euser;
 
 pub const PHYS_FRAME_END: usize = 0x80800000;
 
-pub trait FrameAllocator {
-    fn alloc(&mut self) -> Option<PhysPageNum> ;
-    fn dealloc(&mut self, ppn: PhysPageNum) -> Result<(), &str> ;
-    fn mark(&mut self, ppn: PhysPageNum) ;
+static mut CURRENT: PhysPageNum = PhysPageNum(0);
+static mut END: PhysPageNum = PhysPageNum(0);
+
+static mut RECYCLE: Vec<PhysPageNum> = Vec::new();
+
+pub fn init() {
+    unsafe {
+    CURRENT = PhysAddr(euser as usize).ceil();
+    END = PhysAddr(PHYS_FRAME_END).floor();
+    }
 }
 
 lazy_static!{
-pub static ref PHYSFRAME_ALLOCATOR: Mutex<StackFrameAllocator> = 
-    Mutex::new(StackFrameAllocator::new(
-            euser as usize, PHYS_FRAME_END));
+static ref PHYSFRAME_ALLOCATOR: Mutex<StackFrameAllocator> = 
+    Mutex::new(StackFrameAllocator {
+        current: PhysPageNum(0),
+        end: PhysPageNum(0),
+        recycled: Vec::new()
+    });
 }
+
+pub trait FrameAllocator {
+    fn alloc(&mut self) -> Option<PhysPageNum> ;
+    fn dealloc(&mut self, ppn: PhysPageNum) -> Result<(), ()> ;
+    fn mark(&mut self, ppn: PhysPageNum) ;
+}
+
 
 pub struct StackFrameAllocator {
     pub current: PhysPageNum,
@@ -26,8 +42,41 @@ pub struct StackFrameAllocator {
     pub recycled: Vec<PhysPageNum>
 }
 
+pub fn alloc() -> Option<PhysPageNum> {
+    unsafe {
+        if CURRENT <= END {
+            CURRENT = PhysPageNum(CURRENT.0 + 1);
+            log!(debug "Physic frame alloc return 0x{:x}", CURRENT.0 - 1);
+            return Some(PhysPageNum(CURRENT.0 - 1))
+        }
+    }
+    None
+}
+pub fn dealloc(ppn: PhysPageNum) -> Result<(), ()> {
+    unsafe {
+        if ppn <= END {
+            RECYCLE.push(ppn);
+            return Ok(())
+        }
+    }
+        Err(())
+}
+
+pub fn mark(ppn: PhysPageNum) {
+    PHYSFRAME_ALLOCATOR.lock().mark(ppn)
+}
+
+/*
+pub fn init() {
+    log!(debug "Physic frame allocator init");
+    let mut allocator = PHYSFRAME_ALLOCATOR.lock();
+    allocator.current = PhysAddr(euser as usize).ceil();
+    allocator.end = PhysPageNum::from(PHYS_FRAME_END);
+}
+*/
+
 impl StackFrameAllocator {
-    pub fn new(start: usize, end: usize) -> Self {
+    fn new(start: usize, end: usize) -> Self {
         log!(debug "New StackFrameAllocator");
         Self {
             current: PhysAddr(start).ceil(),
@@ -47,12 +96,12 @@ impl FrameAllocator for StackFrameAllocator {
         None
     }
 
-    fn dealloc(&mut self, ppn: PhysPageNum) -> Result<(), &str> {
+    fn dealloc(&mut self, ppn: PhysPageNum) -> Result<(), ()> {
         if ppn <= self.end {
             self.recycled.push(ppn);
             return Ok(())
         }
-        Err("Bad deallocation")
+        Err(())
     }
 
     fn mark(&mut self, ppn: PhysPageNum) {

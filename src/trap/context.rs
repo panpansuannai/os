@@ -1,10 +1,12 @@
 use riscv::register::sstatus::{Sstatus, self, SPP};
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct TrapContext {
     pub general_reg: [usize; 32],
     pub sstatus: Sstatus,
     pub sepc: usize,
+    pub satp: usize,
     pub kernel_satp: usize,
     pub kernel_sp: usize,
     pub trap_handler: usize,
@@ -17,6 +19,7 @@ impl TrapContext {
     pub fn app_init_context(
         entry: usize,
         sp: usize,
+        satp: usize,
         kernel_satp: usize,
         kernel_sp: usize,
         trap_handler: usize,
@@ -29,6 +32,7 @@ impl TrapContext {
             general_reg: [0; 32],
             sstatus,
             sepc: entry,
+            satp,
             kernel_satp,
             kernel_sp,
             trap_handler,

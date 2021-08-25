@@ -11,6 +11,8 @@
 #![feature(const_raw_ptr_to_usize_cast)]
 #![feature(fn_align)]
 #![feature(alloc_error_handler)]
+#![feature(trace_macros)]
+#![feature(const_trait_impl)]
 
 #[macro_use]
 mod lang_items;
@@ -52,11 +54,13 @@ extern "C" fn kernel_start() {
     use trap::context::TrapContext;
     use task::TASK_MANAGER;
     use mm::memory_space::MemorySpace;
+    use mm::address::*;
+    use mm::pte_sv39::PTEFlag;
     
     // Use new stack
     unsafe { 
         asm!("mv sp, {0}",
-         in(reg) batch::KERNEL_STACK.get_sp());
+         in(reg) batch::KERNEL_STACK.get_top());
     }
     mm::init();
     clear_bss();
@@ -65,29 +69,28 @@ extern "C" fn kernel_start() {
     println!("[kernel] Init heap");
     trap::init();
     println!("[kernel] Init trap");
-    batch::init();
-    println!("[kernel] Init batch");
-
-    log!(info ".text [{:#x}, {:#x})", 
-        map_sym::stext as usize, map_sym::etext as usize);
-    log!(debug ".rodata [{:#x}, {:#x})",
-        map_sym::srodata as usize, map_sym::erodata as usize);
-    log!(error ".data [{:#x}, {:#x})",
-        map_sym::sdata as usize, map_sym::edata as usize);
 
     // Run user space application
-    let mut app_manager = APP_MANAGER.inner.borrow();
     println!("[kernel] Load user address space");
-    let virtual_space = unsafe { 
+    let mut virtual_space = unsafe { 
         MemorySpace::from_elf(core::slice::from_raw_parts(
                 user::APP_START[0].0 as *const u8,
-                user::APP_START[0].1 - user::APP_START[0].0));
+                user::APP_START[0].1 - user::APP_START[0].0))
     };
+    println!("[kernel] Maping trampoline");
+    virtual_space.page_table.map_on_the_area(
+        VirtualAddr(trap::__alltraps as usize)..=VirtualAddr(trap::trampoline as usize),
+        PTEFlag::R|PTEFlag::X);
+    println!("[kernel] Maping kernel stack 0x{:x} - 0x{:x}", batch::KERNEL_STACK.get_top(),
+            batch::KERNEL_STACK.get_bottom());
+    virtual_space.page_table.map_on_the_area(
+        VirtualAddr(batch::KERNEL_STACK.get_bottom())..=VirtualAddr(batch::KERNEL_STACK.get_top()),
+        PTEFlag::R|PTEFlag::W);
     println!("[kernel] Load user address space");
 
     let context0 = TrapContext::app_init_context(
-        app_manager.app_start_addr(0).unwrap(),
-        batch::USER_STACK0.get_sp(), 0, 0, 0);
+        virtual_space.entry(),
+        virtual_space.get_stack(), virtual_space.get_root_ppn().0 | 0x8000000000000000, 0, 0, 0);
 
     println!("[kernle] Loading apps as tasks");
     TASK_MANAGER.load_task(&context0);

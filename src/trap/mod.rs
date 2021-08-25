@@ -18,9 +18,11 @@ use context::TrapContext;
 
 extern "C" { pub fn __alltraps(); }
 extern "C" { pub fn __restore(cx: usize); }
+extern "C" { pub fn trampoline(); }
 
 pub fn _restore(cx: usize){
     println!("[kernel] restore context: 0x{:x}", cx);
+    unsafe { log!(debug "context: {:?}", *(cx as *const TrapContext)); }
     unsafe { __restore(cx); }
 }
 
@@ -56,10 +58,17 @@ pub extern "C" fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext{
         }
         Trap::Exception(Exception::StoreFault) |
         Trap::Exception(Exception::StorePageFault) => {
-            panic!("PageFault in application, core dumped. sepc:0x{:x}", cx.sepc);
+            if let riscv::register::sstatus::SPP::Supervisor = cx.sstatus.spp() {
+                panic!("PageFault in application, core dumped. sepc:0x{:x}", cx.sepc);
+            }else {
+                panic!("PageFault in application, core dumped. sepc:0x{:x}", cx.sepc);
+            }
         }
         Trap::Exception(Exception::IllegalInstruction) => {
             panic!(" IllegalInstruction in application, core dumped. sepc:0x{:X}", cx.sepc);
+        }
+        Trap::Exception(Exception::InstructionPageFault) => {
+            panic!(" InstructionPageFault, core dumped, sepc: 0x{:x}, scause:{:?}", cx.sepc, scause.cause());
         }
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
             crate::trap::time::set_next_trigger();

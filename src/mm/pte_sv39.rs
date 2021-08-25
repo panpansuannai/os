@@ -7,9 +7,7 @@
 ///  -------------------------------------------------------|
 ///                                        |- PTE_FLAG_SIZE-|
 ///
-use super::address::{
-    PhysPageNum
-};
+use super::address::PhysPageNum;
 
 pub const PTE_FLAG_SIZE: usize = 8;
 pub const PTE_PPN_OFFSET: usize = 10;

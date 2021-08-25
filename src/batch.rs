@@ -6,11 +6,6 @@ use crate::trap::context::TrapContext;
 const USER_STACK_SIZE: usize = 4096 * 2;
 const KERNEL_STACK_SIZE: usize = 4096 * 2;
 pub static KERNEL_STACK: KernelStack = KernelStack { data: [0; KERNEL_STACK_SIZE] };
-#[link_section = ".user"]
-pub static USER_STACK0: UserStack = UserStack { data: [0; USER_STACK_SIZE] };
-#[link_section = ".user"]
-pub static USER_STACK1: UserStack = UserStack { data: [0; USER_STACK_SIZE] };
-
 pub const APP_BASE_ADDR : usize = 0x80300000;
 
 #[repr(align(4096))]
@@ -19,13 +14,16 @@ pub struct KernelStack {
 }
 
 impl KernelStack {
-    pub fn get_sp(&self) -> usize {
+    pub fn get_top(&self) -> usize {
         self.data.as_ptr() as usize + USER_STACK_SIZE
+    }
+    pub fn get_bottom(&self) -> usize {
+        self.data.as_ptr() as usize
     }
 
     pub fn push_context(&self, cx: TrapContext) -> &mut TrapContext {
         println!("[kernel] Pushing context");
-        let cx_ptr = (self.get_sp() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
+        let cx_ptr = (self.get_top() - core::mem::size_of::<TrapContext>()) as *mut TrapContext;
         unsafe { *cx_ptr = cx; }
         unsafe { cx_ptr.as_mut().unwrap() }
     }
@@ -56,15 +54,6 @@ pub struct AppManagerInner {
 
 impl AppManagerInner {
     pub fn run_app(&self, app_id: usize){
-        // For now, don't need load app
-        // self.load_app(app_id);
-        println!("[kernel] App loaded");
-        crate::trap::_restore(KERNEL_STACK.push_context(
-                    TrapContext::app_init_context(
-                        self.app_start_addr(app_id).unwrap(),
-                        USER_STACK0.get_sp(), 
-                        0, KERNEL_STACK.get_sp(), 0)) 
-                        as *const TrapContext as usize);
     }
     pub fn load_app(&self, app_id: usize){
         if app_id > crate::user::APP_NUM {

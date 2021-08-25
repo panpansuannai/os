@@ -1,30 +1,30 @@
-use super::address::{
-    VirtualAddr,
-    VirtualPageNum,
-    PhysAddr,
-    PhysPageNum
-};
+use super::address::*;
 use super::pte_sv39::{
     PTE,
     PTE_SIZE,
     PTEFlag
 };
 
-use super::phys_frame::FrameAllocator;
-use super::phys_frame::StackFrameAllocator;
-use alloc::sync::Arc;
+use super::phys_frame::{
+    alloc,
+    dealloc,
+    mark
+};
 use alloc::vec::Vec;
-use spin::Mutex;
 use riscv::register::satp;
-use super::phys_frame::PHYSFRAME_ALLOCATOR;
 
 
 pub struct PhysFrameTracker(pub PhysPageNum);
 
 impl PhysFrameTracker {
-    pub fn new() -> Self {
-        let num = PHYSFRAME_ALLOCATOR.lock().alloc().unwrap();
-        num.clear();
+    pub fn new(map_to_kernel: bool) -> Self {
+        let num = alloc().unwrap();
+        if map_to_kernel {
+            unsafe { 
+            super::KERNEL_PAGE_TABLE.map_frame(
+                VirtualPageNum(num.0), PTEFlag::R|PTEFlag::W, num);
+            }
+        }
         Self(num)
     }
 }
@@ -39,46 +39,63 @@ pub struct PageTable{
     pub frames: Vec<PhysFrameTracker>
 }
 
+impl const Default for PageTable{
+    fn default() -> Self {
+        PageTable{
+            root_ppn: PhysPageNum(0),
+            frames: Vec::new()
+        }
+    }
+}
+
 impl PageTable{
-    pub fn new() -> Self {
-        let ppn = PHYSFRAME_ALLOCATOR.lock().alloc().unwrap();
+    pub fn new(read_page_table: bool, map_parent: Option<&mut PageTable>) -> Self {
+        log!(debug "New Page Table");
+        let ppn = alloc().unwrap();
         let mut table = PageTable {
             root_ppn: ppn,
             frames: Vec::new()
         };
-        if unsafe { super::KERNEL_PAGE_TABLE_INIT } {
-            unsafe { super::KERNEL_PAGE_TABLE.lock()
-                .map_frame(VirtualPageNum(ppn.0), PTEFlag::R, ppn); };
-        }else {
-            unsafe { table.map_frame(VirtualPageNum(ppn.0), PTEFlag::R, ppn); };
+        if read_page_table {
+            unsafe { 
+                table.map_frame(
+                    VirtualPageNum(ppn.0), PTEFlag::R, ppn); 
+            };
+        }
+        if let Some(map_parent) = map_parent {
+            unsafe {
+                map_parent.map_frame(
+                    VirtualPageNum(ppn.0), PTEFlag::R|PTEFlag::W, ppn);
+            }
         }
         table
     }
+
     pub fn map(&mut self, vaddr: VirtualPageNum, flag: PTEFlag) -> Option<PhysFrameTracker>{
         let pte = self.find_pte(vaddr).unwrap() as *mut PTE;
-        let _pte = unsafe { *pte };
-        if !_pte.is_valid() {
-            let frame_track = PhysFrameTracker::new();
-            let new_pte = PTE::new(frame_track.0, flag | PTEFlag::V);
-            unsafe { *pte = new_pte; }
+        unsafe { 
+            if !(*pte).is_valid() {
+                *pte = PTE::new(PhysFrameTracker::new(true).0, flag | PTEFlag::V); 
+            }else {
+                *pte = PTE::new((*pte).ppn(), flag | (*pte).flags()); 
+            }
         }
         //assert!(pte.is_readable(), "&pte:0x{:x}, ppn:0x{:x}, bits:{:?}",
         //    pte as *const PTE as usize, pte.ppn().0, pte.flags());
-        Some(PhysFrameTracker(_pte.ppn()))
+        Some(PhysFrameTracker( unsafe { *pte } .ppn()))
     }
 
-    pub unsafe fn map_frame(&mut self, vaddr: VirtualPageNum,
-                     flag: PTEFlag,
-                     frame: PhysPageNum) -> Option<PhysFrameTracker>{
+    pub unsafe fn map_frame(&mut self,
+                            vaddr: VirtualPageNum,
+                            flag: PTEFlag,
+                            frame: PhysPageNum) -> Option<PhysFrameTracker>{
         log!(debug "Maping frame: 0x{:x}", vaddr.0);
         let pte = self.find_pte(vaddr).unwrap();
-        let pte =  pte as *mut PTE ;
-        if !(*pte).is_valid() {
-            let new_pte = PTE::new(frame, flag | PTEFlag::V);
-            *pte = new_pte;
-            PHYSFRAME_ALLOCATOR.lock().mark(frame);
+        if !pte.is_valid() {
+            *pte = PTE::new(frame, flag | PTEFlag::V);
+            mark(frame);
         }
-        Some(PhysFrameTracker((*pte).ppn()))
+        Some(PhysFrameTracker(pte.ppn()))
     }
 
     // Map the physic addresses to the same addresses in virtual space
@@ -109,29 +126,34 @@ impl PageTable{
         }
     }
 
+    // Alloc a physic page for the invalid pte
     fn alloc_pte(&mut self, pte: *mut PTE, flag: PTEFlag) {
         log!(debug "Alloc pte: 0x{:x}", pte as usize);
-        let page = PHYSFRAME_ALLOCATOR.lock().alloc().unwrap();
-        unsafe { *pte = PTE::new(page, flag); }
-        let page_table = page;
-        drop(page);
-        // Fix: 
+        let mut page;
+        unsafe {
+            if (*pte).is_valid() {
+                page = (*pte).ppn();
+            }else {
+                page = alloc().unwrap();
+            }
+            *pte = PTE::new(page, flag);
+        }
         unsafe {
             if super::KERNEL_PAGE_TABLE_INIT {
-                super::KERNEL_PAGE_TABLE.lock().map_page_table(page_table);
+                super::KERNEL_PAGE_TABLE.map_page_table(page);
             } else {
-                self.map_page_table(page_table);
+                self.map_page_table(page);
             }
         }
     }
 
+    // Find the pte at the last level associated to the page number
     pub fn find_pte(&mut self, vaddr: VirtualPageNum) -> Option<&mut PTE> {
         log!(debug "Finding pte :0x{:x}", vaddr.0);
         let mut pte_ptr = 0 as *mut PTE;
         let mut ppn = self.root_ppn;
-        for i in (0..3).rev() {
-            pte_ptr = (PhysAddr::from(ppn).0
-                       + vaddr.vpn_block_sv39(i) * PTE_SIZE) as *mut PTE;
+        for i in (0..PAGE_TABLE_LEVEL).rev() {
+            pte_ptr = ppn.offset(vaddr.vpn_block_sv39(i) * PTE_SIZE).0 as *mut PTE;
             let pte = unsafe { pte_ptr.as_ref().unwrap() };
             if i > 0 {
                 if !pte.is_valid() {
@@ -139,7 +161,7 @@ impl PageTable{
                 }
                 if pte.is_leaf() {
                     // Big page size not support
-                    return None
+                    unimplemented!("Not support big page");
                 }
             }
             ppn = pte.ppn();

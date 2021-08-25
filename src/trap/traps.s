@@ -4,6 +4,7 @@
 .endm
 
 .globl __alltraps
+.globl trampoline
 .align 2
 __alltraps:
     csrrw sp, sscratch, sp
@@ -38,6 +39,7 @@ __alltraps:
 .endm
 
 .globl __restore
+.globl __restore_end
 __restore:
     # case1: start running app by __restore
     # case2: back to U after handling trap
@@ -60,7 +62,10 @@ __restore:
     .endr
     # release TrapContext on kernel stack
     addi sp, sp, 34*8
+    ld t0, 0(sp)
+    csrw satp, t0
     # now sp->kernel stack, sscratch->user stack
     csrrw sp, sscratch, sp
     sfence.vma
     sret
+trampoline:
