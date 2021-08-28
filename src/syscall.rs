@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+use crate::mm::address::*;
 pub const SYS_WRITE: usize = 64;
 pub const SYS_EXIT: usize = 93;
 pub const SYS_YIELD: usize = 124;
@@ -20,11 +22,18 @@ pub fn syscall(id: usize, param: [usize; 3]) -> isize{
 }
 
 fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
+    let mut current_task = crate::task::TASK_MANAGER.get_current_task();
+    let mut buffer = Vec::<u8>::with_capacity(len);
+    let mut i = 0;
+    while i < len{
+        buffer.push(0_u8);
+        i = i + 1;
+    }
+    current_task.get_memory_space().copy_virtual_address(VirtualAddr(buf as usize), len, buffer.as_mut_slice());
     const FD_STDOUT: usize = 1;
     match fd {
         FD_STDOUT => {
-            let slice = unsafe {
-                core::slice::from_raw_parts(buf, len) };
+            let slice = buffer.as_slice();
             let string = core::str::from_utf8(slice).unwrap();
             for c in string.chars() {
                 crate::sbi::sbi_call(crate::sbi::PUT_CHAR, [c as usize, 0, 0]);
@@ -45,12 +54,7 @@ fn sys_exit(xstate: usize) -> ! {
     panic!("");
 }
 
-fn sys_yield(cx: usize) -> ! {
+fn sys_yield(_: usize) -> ! {
     println!("[kernel] syscall Yield");
-    use crate::task::TASK_MANAGER;
-    TASK_MANAGER.set_current_task_cx(cx);
-    TASK_MANAGER.set_current_task_ready();
-    TASK_MANAGER.start_next_task();
-    println!("[kernel] syscall Yield unreachable");
-    loop {}
+    unimplemented!("TODO");
 }

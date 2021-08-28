@@ -15,21 +15,27 @@ use riscv::register::{
 };
 
 use context::TrapContext;
+use crate::task::TASK_MANAGER;
 
 extern "C" { pub fn __alltraps(); }
-extern "C" { pub fn __restore(cx: usize); }
+extern "C" { pub fn __restore(cx: usize, satp: usize); }
 extern "C" { pub fn trampoline(); }
 
-pub fn _restore(cx: usize){
+pub fn _restore(cx: usize, satp: usize){
     println!("[kernel] restore context: 0x{:x}", cx);
-    unsafe { log!(debug "context: {:?}", *(cx as *const TrapContext)); }
-    unsafe { __restore(cx); }
+    //unsafe { log!(debug "context: {:?}", *(cx as *const TrapContext)); }
+    unsafe { 
+    let (_, restore) = crate::mm::KERNEL_MEMORY_SPACE.trampoline_entry();
+    let restore  = core::mem::transmute::<*const (), fn (usize, usize)>(restore as *const ());
+    restore(cx, satp);
+    };
 }
 
 global_asm!(include_str!("traps.s"));
 pub fn init() { 
     unsafe {
-        stvec::write(__alltraps as usize, TrapMode::Direct);
+        let (alltraps, _) = crate::mm::KERNEL_MEMORY_SPACE.trampoline_entry();
+        stvec::write(alltraps, TrapMode::Direct);
     }
 }
 
@@ -40,7 +46,10 @@ pub fn enable_timer_interupt() {
 }
 
 #[no_mangle]
-pub extern "C" fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext{
+pub extern "C" fn trap_handler() -> ! {
+    println!("[kernel] In trap handler");
+    let mut current_task = TASK_MANAGER.get_current_task();
+    let cx = current_task.get_context();
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
@@ -80,6 +89,8 @@ pub extern "C" fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext{
                    scause.cause(), scause.bits(), stval);
         }
     }
-    cx
+    TASK_MANAGER.update_current_task(current_task);
+    TASK_MANAGER.start_next_task();
+    loop {} 
 }
 

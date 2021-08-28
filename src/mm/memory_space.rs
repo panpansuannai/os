@@ -3,15 +3,29 @@ use xmas_elf::ElfFile;
 use super::address::*;
 use super::pte_sv39::PTEFlag;
 use core::ops::RangeInclusive;
+use crate::trap::context::TrapContext;
+use crate::trap::{ __alltraps, __restore };
 
 pub const USER_STACK_SIZE: usize = 4096;
 
+#[derive(Copy, Clone)]
 pub struct MemorySpace {
     pub page_table: PageTable,
-    entry : usize
+    pub entry : usize
+}
+
+impl const Default for MemorySpace {
+    fn default() -> Self {
+        Self {
+            page_table: PageTable::default(),
+            entry: 0
+        }
+    }
 }
 
 impl MemorySpace {
+    #![allow(dead_code)]
+
     fn validate_elf_header(header: xmas_elf::header::Header) -> bool {
         let magic = header.pt1.magic;
         assert_eq!(magic, [0x7f, 0x45, 0x4c, 0x46], "invalid elf!");
@@ -45,7 +59,53 @@ impl MemorySpace {
     }
     fn map_user_stack(&mut self) {
         // User stack start from 0
-        self.map_area_zero(VirtualAddr(1024)..=VirtualAddr(0+USER_STACK_SIZE), PTEFlag::U|PTEFlag::R|PTEFlag::W);
+        self.map_area_zero(VirtualAddr(1024)..=VirtualAddr(0+USER_STACK_SIZE),
+            PTEFlag::U|PTEFlag::R|PTEFlag::W);
+    }
+    pub fn trampoline_page() -> VirtualPageNum {
+        VirtualPageNum::highest_page()
+    }
+
+    // Return (alltraps, restore)
+    pub fn trampoline_entry(&self) -> (usize, usize) {
+        let alltraps = Into::<VirtualAddr>::into(Self::trampoline_page());
+        let restore = alltraps.offset((__restore as usize  - __alltraps as usize) as isize);
+        (alltraps.0, restore.0)
+    }
+
+    pub fn context_page() -> VirtualPageNum {
+        VirtualPageNum(VirtualPageNum::highest_page().0 - 1)
+    }
+    pub fn context_addr() -> VirtualAddr {
+        Into::<VirtualAddr>::into(Self::context_page())
+    }
+    pub fn map_context(&mut self, ctx: &TrapContext) -> PhysPageNum {
+        let context_page = Self::context_page();
+        let mut tracker = self.page_table
+            .map(context_page, PTEFlag::R|PTEFlag::W|PTEFlag::V).unwrap();
+        tracker.write(0, unsafe {
+          core::slice::from_raw_parts(ctx as *const TrapContext as *const u8, 
+                                      core::mem::size_of::<TrapContext>())
+        });
+        tracker.0
+
+    }
+
+    pub fn copy_virtual_address(&mut self, src: VirtualAddr, len: usize, dst: &mut [u8]) {
+        let page = self.page_table.find_pte(VirtualPageNum::from(src)).unwrap().ppn();
+        let src = unsafe { 
+            core::slice::from_raw_parts(page.offset(src.page_offset()).0 as *const u8, len)
+        };
+        dst.copy_from_slice(src);
+    }
+
+    pub fn map_trampoline(&mut self) {
+        let page = MemorySpace::trampoline_page();
+        let mut tracker = self.page_table.map(page, PTEFlag::R|PTEFlag::X|PTEFlag::V).unwrap();
+        tracker.write(0, unsafe {
+            core::slice::from_raw_parts(crate::trap::__alltraps as *const u8,
+                crate::trap::trampoline as usize - crate::trap::__alltraps as usize)
+        });
     }
     pub fn get_stack(&self) -> usize{
         1024
@@ -90,6 +150,7 @@ impl MemorySpace {
         crate::console::turn_on_log();
     }
 
+    // Unused
     pub fn map_area_data(&mut self, area: RangeInclusive<VirtualAddr>,
                          flags: PTEFlag, mut data: &[u8]) {
         let (start, end) = area.into_inner();

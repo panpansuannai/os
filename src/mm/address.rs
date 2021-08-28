@@ -59,6 +59,11 @@ impl From<usize> for PhysPageNum {
 
 impl From<PhysPageNum> for PhysAddr {
     fn from(page_num: PhysPageNum) -> Self{
+        if page_num.0 >= (1 << PAGE_TABLE_LEVEL * SV39_VPN_BIT - 1) {
+            return PhysAddr((page_num.0  
+                               | (usize::max_value()) << (PAGE_TABLE_LEVEL * SV39_VPN_BIT)) 
+                               << PAGE_OFFSET_BIT)
+        }
         PhysAddr(page_num.0 << PAGE_OFFSET_BIT)
     }
 }
@@ -71,6 +76,11 @@ impl From<VirtualAddr> for VirtualPageNum {
 
 impl From<VirtualPageNum> for VirtualAddr {
     fn from(page_num: VirtualPageNum) -> Self{
+        if page_num.0 >= (1 << PAGE_TABLE_LEVEL * SV39_VPN_BIT - 1) {
+            return VirtualAddr((page_num.0  
+                               | (usize::max_value()) << (PAGE_TABLE_LEVEL * SV39_VPN_BIT)) 
+                               << PAGE_OFFSET_BIT)
+        }
         VirtualAddr(page_num.0 << PAGE_OFFSET_BIT)
     }
 }
@@ -109,5 +119,8 @@ impl VirtualPageNum {
     pub fn offset(&self, off: usize) -> VirtualAddr{
         let addr : VirtualAddr = VirtualAddr::from(self.clone());
         addr.offset(off as isize)
+    }
+    pub const fn highest_page() -> Self {
+        VirtualPageNum((1 << (PAGE_TABLE_LEVEL * SV39_VPN_BIT)) - 1)
     }
 }

@@ -13,7 +13,7 @@ use super::phys_frame::{
 use alloc::vec::Vec;
 use riscv::register::satp;
 
-
+#[derive(Clone)]
 pub struct PhysFrameTracker(pub PhysPageNum);
 
 impl PhysFrameTracker {
@@ -27,6 +27,12 @@ impl PhysFrameTracker {
         }
         Self(num)
     }
+    pub fn write(&mut self, offset: usize, data: &[u8]) {
+        let dst = unsafe {
+            core::slice::from_raw_parts_mut((PhysAddr::from(self.0).0 + offset) as *mut u8, data.len())
+        };
+        dst.copy_from_slice(data);
+    }
 }
 impl Default for PhysFrameTracker {
     fn default() -> Self {
@@ -34,16 +40,15 @@ impl Default for PhysFrameTracker {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct PageTable{
     pub root_ppn: PhysPageNum,
-    pub frames: Vec<PhysFrameTracker>
 }
 
 impl const Default for PageTable{
     fn default() -> Self {
         PageTable{
             root_ppn: PhysPageNum(0),
-            frames: Vec::new()
         }
     }
 }
@@ -54,7 +59,6 @@ impl PageTable{
         let ppn = alloc().unwrap();
         let mut table = PageTable {
             root_ppn: ppn,
-            frames: Vec::new()
         };
         if read_page_table {
             unsafe { 

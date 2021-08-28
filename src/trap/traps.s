@@ -8,10 +8,6 @@
 .align 2
 __alltraps:
     csrrw sp, sscratch, sp
-    # now sp->kernel stack, sscratch->user stack
-    # allocate a TrapContext on kernel stack
-    addi sp, sp, -34*8
-    # save general-purpose registers
     sd x1, 1*8(sp)
     # skip sp(x2), we will save it later
     sd x3, 3*8(sp)
@@ -30,9 +26,27 @@ __alltraps:
     # read user stack from sscratch and save it on the kernel stack
     csrr t2, sscratch
     sd t2, 2*8(sp)
-    # set input argument of trap_handler(cx: &mut TrapContext)
-    mv a0, sp
-    call trap_handler
+    # load kernel_satp into t0
+    ld t0, 35*8(sp)
+    # load trap_handler into t1
+    ld t1, 37*8(sp)
+
+    # copy context to stack
+    # ld t0, 36*8(sp)
+    # .set n, 0
+    # .rept 38
+    # ld t1, n*8(sp)
+    # sd t1, n*8(t0)
+    # .set n, n+1
+    # .endr
+
+    # move to kernel_sp
+    ld sp, 36*8(sp)
+    # switch to kernel space
+    csrw satp, t0
+    sfence.vma
+    # jump to trap_handler
+    jr t1
 
 .macro LOAD_GP reg
     ld x\reg, \reg*8(sp)
@@ -41,18 +55,19 @@ __alltraps:
 .globl __restore
 .globl __restore_end
 __restore:
-    # case1: start running app by __restore
-    # case2: back to U after handling trap
+    # a0: *TrapContext in user space(Constant); a1: user space token
+    # switch to user space
+    csrw satp, a1
+    sfence.vma
+    csrw sscratch, a0
     mv sp, a0
-    # now sp->kernel stack(after allocated), sscratch->user stack
+    # now sp points to TrapContext in user space, start restoring based on it
     # restore sstatus/sepc
     ld t0, 32*8(sp)
     ld t1, 33*8(sp)
-    ld t2, 2*8(sp)
     csrw sstatus, t0
     csrw sepc, t1
-    csrw sscratch, t2
-    # restore general-purpuse registers except sp/tp
+    # restore general purpose registers except x0/sp/tp
     ld x1, 1*8(sp)
     ld x3, 3*8(sp)
     .set n, 5
@@ -60,12 +75,7 @@ __restore:
         LOAD_GP %n
         .set n, n+1
     .endr
-    # release TrapContext on kernel stack
-    addi sp, sp, 34*8
-    ld t0, 0(sp)
-    csrw satp, t0
-    # now sp->kernel stack, sscratch->user stack
-    csrrw sp, sscratch, sp
-    sfence.vma
+    # back to user stack
+    ld sp, 2*8(sp)
     sret
 trampoline:

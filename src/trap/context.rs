@@ -7,6 +7,8 @@ pub struct TrapContext {
     pub sstatus: Sstatus,
     pub sepc: usize,
     pub satp: usize,
+
+    // Read only
     pub kernel_satp: usize,
     pub kernel_sp: usize,
     pub trap_handler: usize,

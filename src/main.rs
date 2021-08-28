@@ -50,12 +50,10 @@ fn clear_bss() {
 // [no_mangle] Turn off Rust's name mangling
 #[no_mangle]
 extern "C" fn kernel_start() {
-    use batch::APP_MANAGER;
     use trap::context::TrapContext;
     use task::TASK_MANAGER;
     use mm::memory_space::MemorySpace;
     use mm::address::*;
-    use mm::pte_sv39::PTEFlag;
     
     // Use new stack
     unsafe { 
@@ -78,22 +76,20 @@ extern "C" fn kernel_start() {
                 user::APP_START[0].1 - user::APP_START[0].0))
     };
     println!("[kernel] Maping trampoline");
-    virtual_space.page_table.map_on_the_area(
-        VirtualAddr(trap::__alltraps as usize)..=VirtualAddr(trap::trampoline as usize),
-        PTEFlag::R|PTEFlag::X);
-    println!("[kernel] Maping kernel stack 0x{:x} - 0x{:x}", batch::KERNEL_STACK.get_top(),
-            batch::KERNEL_STACK.get_bottom());
-    virtual_space.page_table.map_on_the_area(
-        VirtualAddr(batch::KERNEL_STACK.get_bottom())..=VirtualAddr(batch::KERNEL_STACK.get_top()),
-        PTEFlag::R|PTEFlag::W);
+    virtual_space.map_trampoline();
+
     println!("[kernel] Load user address space");
 
     let context0 = TrapContext::app_init_context(
-        virtual_space.entry(),
-        virtual_space.get_stack(), virtual_space.get_root_ppn().0 | 0x8000000000000000, 0, 0, 0);
+        virtual_space.entry(), virtual_space.get_stack(),
+        virtual_space.get_root_ppn().0 | 0x8000000000000000, 
+        unsafe { mm::KERNEL_PAGE_TABLE.root_ppn.0 | 0x8000000000000000 } ,
+        batch::KERNEL_STACK.get_top(), trap::trap_handler as usize);
+
+    let context_phys_page = virtual_space.map_context(&context0);
 
     println!("[kernle] Loading apps as tasks");
-    TASK_MANAGER.load_task(&context0);
+    TASK_MANAGER.load_task(virtual_space);
     //trap::enable_timer_interupt();
     //trap::time::set_next_trigger();
     TASK_MANAGER.start_next_task();

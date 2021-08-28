@@ -3,20 +3,22 @@ pub mod pte_sv39;
 pub mod phys_frame;
 pub mod page_table;
 pub mod memory_space;
+use memory_space::MemorySpace;
 use page_table::PageTable;
 use address::*;
 use pte_sv39::PTEFlag;
 use crate::map_sym::*;
 
 pub static mut KERNEL_PAGE_TABLE : PageTable = PageTable::default();
+pub static mut KERNEL_MEMORY_SPACE: MemorySpace = MemorySpace::default();
 
 static mut KERNEL_PAGE_TABLE_INIT: bool = false;
 
 pub fn init() {
     phys_frame::init();
     init_kernel_page_table();
-    set_sstatus_sum();
-    //set_sstatus_mxr();
+    // set_sstatus_sum();
+    // set_sstatus_mxr();
     map_kernel_memory_space();
     println!("[kernel] Try to activate VM");
     unsafe { 
@@ -49,7 +51,11 @@ fn set_sstatus_mxr() {
 }
 
 fn init_kernel_page_table() {
-    unsafe { KERNEL_PAGE_TABLE = PageTable::new(true, None)} ;
+    unsafe {
+        KERNEL_PAGE_TABLE = PageTable::new(true, None);
+        KERNEL_MEMORY_SPACE.page_table = KERNEL_PAGE_TABLE.clone();
+        KERNEL_MEMORY_SPACE.map_trampoline();
+    };
 }
 
 fn kernel_page_table_ready() {
