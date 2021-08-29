@@ -4,7 +4,7 @@ use super::address::{
 };
 use alloc::vec::Vec;
 use crate::spin::Mutex;
-use crate::map_sym::euser;
+use crate::map_sym::frames;
 
 pub const PHYS_FRAME_END: usize = 0x80800000;
 
@@ -15,7 +15,7 @@ static mut RECYCLE: Vec<PhysPageNum> = Vec::new();
 
 pub fn init() {
     unsafe {
-    CURRENT = PhysAddr(euser as usize).ceil();
+    CURRENT = PhysAddr(frames as usize + 1).ceil();
     END = PhysAddr(PHYS_FRAME_END).floor();
     }
 }

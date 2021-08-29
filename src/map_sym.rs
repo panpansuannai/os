@@ -8,10 +8,9 @@ extern "C" {
     pub fn erodata();
     pub fn stext();
     pub fn etext();
+    pub fn frames();
     pub fn sbss();
     pub fn ebss();
-    pub fn suser();
-    pub fn euser();
     pub fn skernel();
     pub fn ekernel();
 }

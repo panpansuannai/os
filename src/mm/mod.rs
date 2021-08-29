@@ -20,6 +20,7 @@ pub fn init() {
     // set_sstatus_sum();
     // set_sstatus_mxr();
     map_kernel_memory_space();
+    kernel_map_trampoline();
     println!("[kernel] Try to activate VM");
     unsafe { 
         KERNEL_PAGE_TABLE.activate();
@@ -29,16 +30,13 @@ pub fn init() {
 
 fn map_kernel_memory_space() {
     let kernel_start: VirtualAddr = (skernel as usize).into();
-    let kernel_end: VirtualAddr = (ekernel as usize).into();
+    let kernel_end: VirtualAddr = (frames as usize).into();
     println!("[kernel] Maping kernel (0x{:x}, 0x{:x})",
         kernel_start.0, kernel_end.0);
     unsafe {
         KERNEL_PAGE_TABLE.map_on_the_area(kernel_start..=kernel_end,
             PTEFlag::R|PTEFlag::W|PTEFlag::X);
 
-        KERNEL_PAGE_TABLE.map_on_the_area(
-            VirtualAddr(suser as usize)..= VirtualAddr(euser as usize),
-            PTEFlag::W|PTEFlag::R|PTEFlag::X);
     }
 }
 
@@ -50,11 +48,16 @@ fn set_sstatus_mxr() {
     unsafe { riscv::register::sstatus::set_mxr(); }
 }
 
+fn kernel_map_trampoline() {
+    unsafe { 
+        KERNEL_MEMORY_SPACE.page_table = KERNEL_PAGE_TABLE;
+        KERNEL_MEMORY_SPACE.map_trampoline();
+    }
+}
+
 fn init_kernel_page_table() {
     unsafe {
         KERNEL_PAGE_TABLE = PageTable::new(true, None);
-        KERNEL_MEMORY_SPACE.page_table = KERNEL_PAGE_TABLE.clone();
-        KERNEL_MEMORY_SPACE.map_trampoline();
     };
 }
 

@@ -53,8 +53,8 @@ extern "C" fn kernel_start() {
     use trap::context::TrapContext;
     use task::TASK_MANAGER;
     use mm::memory_space::MemorySpace;
-    use mm::address::*;
     
+    console::turn_off_log();
     // Use new stack
     unsafe { 
         asm!("mv sp, {0}",
@@ -90,8 +90,8 @@ extern "C" fn kernel_start() {
 
     println!("[kernle] Loading apps as tasks");
     TASK_MANAGER.load_task(virtual_space);
-    //trap::enable_timer_interupt();
-    //trap::time::set_next_trigger();
+    trap::enable_timer_interupt();
+    trap::time::set_next_trigger();
     TASK_MANAGER.start_next_task();
     panic!("Shut down"); 
 }

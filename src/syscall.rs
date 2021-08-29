@@ -1,4 +1,3 @@
-use alloc::vec::Vec;
 use crate::mm::address::*;
 pub const SYS_WRITE: usize = 64;
 pub const SYS_EXIT: usize = 93;
@@ -13,7 +12,7 @@ pub fn syscall(id: usize, param: [usize; 3]) -> isize{
             sys_exit(param[0]);
         },
         SYS_YIELD => {
-            sys_yield(param[0]);
+            sys_yield(param[0])
         },
         _ => {
             panic!("No Implement syscall: {}", id);
@@ -23,12 +22,7 @@ pub fn syscall(id: usize, param: [usize; 3]) -> isize{
 
 fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     let mut current_task = crate::task::TASK_MANAGER.get_current_task();
-    let mut buffer = Vec::<u8>::with_capacity(len);
-    let mut i = 0;
-    while i < len{
-        buffer.push(0_u8);
-        i = i + 1;
-    }
+    let mut buffer = alloc::vec![0_u8; len];
     current_task.get_memory_space().copy_virtual_address(VirtualAddr(buf as usize), len, buffer.as_mut_slice());
     const FD_STDOUT: usize = 1;
     match fd {
@@ -54,7 +48,9 @@ fn sys_exit(xstate: usize) -> ! {
     panic!("");
 }
 
-fn sys_yield(_: usize) -> ! {
+fn sys_yield(_: usize) -> isize {
     println!("[kernel] syscall Yield");
-    unimplemented!("TODO");
+    use crate::task::TASK_MANAGER;
+    TASK_MANAGER.set_current_task_ready();
+    0
 }

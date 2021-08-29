@@ -39,11 +39,7 @@ SECTIONS
     ekernel = .;
 
     . = ALIGN(4K);
-    suser = .;
-    .user : {
-      *(.user)
-    }
-    euser = .;
+    frames = .;
 
     /DISCARD/ : {
         *(.eh_frame)

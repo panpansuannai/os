@@ -10,7 +10,6 @@ use super::phys_frame::{
     dealloc,
     mark
 };
-use alloc::vec::Vec;
 use riscv::register::satp;
 
 #[derive(Clone)]
@@ -57,7 +56,7 @@ impl PageTable{
     pub fn new(read_page_table: bool, map_parent: Option<&mut PageTable>) -> Self {
         log!(debug "New Page Table");
         let ppn = alloc().unwrap();
-        let mut table = PageTable {
+        let table = PageTable {
             root_ppn: ppn,
         };
         if read_page_table {
@@ -89,11 +88,11 @@ impl PageTable{
         Some(PhysFrameTracker( unsafe { *pte } .ppn()))
     }
 
-    pub unsafe fn map_frame(&mut self,
+    pub unsafe fn map_frame(&self,
                             vaddr: VirtualPageNum,
                             flag: PTEFlag,
                             frame: PhysPageNum) -> Option<PhysFrameTracker>{
-        log!(debug "Maping frame: 0x{:x}", vaddr.0);
+        log!(debug "Maping frame: 0x{:x}, root_ppn: 0x{:x}", vaddr.0, self.root_ppn.0);
         let pte = self.find_pte(vaddr).unwrap();
         if !pte.is_valid() {
             *pte = PTE::new(frame, flag | PTEFlag::V);
@@ -115,15 +114,15 @@ impl PageTable{
         });
     }
 
-    pub fn unmap(&mut self, vaddr: VirtualPageNum) {
+    pub fn unmap(&self, vaddr: VirtualPageNum) {
         let pte = self.find_pte(vaddr);
         if let Some(pte) = pte {
             pte.set_flags(PTEFlag::empty());
         }
     }
 
-    fn map_page_table(&mut self, page_num: PhysPageNum) {
-        log!(debug "Maping page table 0x{:x}", page_num.0);
+    fn map_page_table(&self, page_num: PhysPageNum) {
+        log!(debug "Maping page table 0x{:x}, root_ppn 0x{:x}", page_num.0, self.root_ppn.0);
         unsafe {
             self.map_frame(VirtualPageNum(page_num.0),
                 PTEFlag::R|PTEFlag::W, page_num);
@@ -131,9 +130,9 @@ impl PageTable{
     }
 
     // Alloc a physic page for the invalid pte
-    fn alloc_pte(&mut self, pte: *mut PTE, flag: PTEFlag) {
+    fn alloc_pte(&self, pte: *mut PTE, flag: PTEFlag) {
         log!(debug "Alloc pte: 0x{:x}", pte as usize);
-        let mut page;
+        let page;
         unsafe {
             if (*pte).is_valid() {
                 page = (*pte).ppn();
@@ -152,7 +151,7 @@ impl PageTable{
     }
 
     // Find the pte at the last level associated to the page number
-    pub fn find_pte(&mut self, vaddr: VirtualPageNum) -> Option<&mut PTE> {
+    pub fn find_pte(&self, vaddr: VirtualPageNum) -> Option<&mut PTE> {
         log!(debug "Finding pte :0x{:x}", vaddr.0);
         let mut pte_ptr = 0 as *mut PTE;
         let mut ppn = self.root_ppn;

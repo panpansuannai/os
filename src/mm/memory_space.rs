@@ -100,6 +100,7 @@ impl MemorySpace {
     }
 
     pub fn map_trampoline(&mut self) {
+        println!("[kernel] Maping trampoline");
         let page = MemorySpace::trampoline_page();
         let mut tracker = self.page_table.map(page, PTEFlag::R|PTEFlag::X|PTEFlag::V).unwrap();
         tracker.write(0, unsafe {
@@ -145,9 +146,7 @@ impl MemorySpace {
             log!(debug "Get page number 0x{:x}", page_num.0);
             let addr = page_num.offset(VirtualAddr::from(i).page_offset());
             unsafe { *(addr.0 as *mut u8) =  data[i - start.0]; }
-            crate::console::turn_off_log();
         }
-        crate::console::turn_on_log();
     }
 
     // Unused

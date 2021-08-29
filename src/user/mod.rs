@@ -1,6 +1,4 @@
-pub mod play;
-
-pub const APP_NUM: usize = 3;
+pub const APP_NUM: usize = 1;
 
 global_asm!(include_str!("apps.s"));
 extern "C" {
@@ -10,19 +8,6 @@ extern "C" {
 
 lazy_static!{
 pub static ref APP_START : [(usize, usize); APP_NUM] = 
-    [(hello as usize, hello_end as usize),
-    (play::main as usize, play::main as usize + 2048), (0, 0)
-    ];
+    [(hello as usize, hello_end as usize)];
 }
 
-#[link_section=".user"]
-fn syscall(id: usize, args: [usize; 3]) -> usize{
-    let mut ret :usize ;
-    unsafe {
-        asm!("ecall", inout("x10") args[0] => ret,
-            in("x11") args[1],
-            in("x12") args[2],
-            in("x17") id);
-    }
-    ret
-}
