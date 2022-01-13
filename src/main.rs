@@ -86,7 +86,7 @@ extern "C" fn kernel_start() {
         unsafe { mm::KERNEL_PAGE_TABLE.root_ppn.0 | 0x8000000000000000 } ,
         batch::KERNEL_STACK.get_top(), trap::trap_handler as usize);
 
-    let context_phys_page = virtual_space.map_context(&context0);
+    virtual_space.map_context(&context0);
 
     println!("[kernle] Loading apps as tasks");
     TASK_MANAGER.load_task(virtual_space);

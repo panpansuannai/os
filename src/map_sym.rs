@@ -2,6 +2,7 @@
 /// provided by linker
 
 extern "C" {
+    #![allow(unused)]
     pub fn sdata();
     pub fn edata();
     pub fn srodata();

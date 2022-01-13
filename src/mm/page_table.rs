@@ -142,7 +142,7 @@ impl PageTable{
             *pte = PTE::new(page, flag);
         }
         unsafe {
-            if super::KERNEL_PAGE_TABLE_INIT {
+            if super::KERNEL_VIRT_MEM_READY {
                 super::KERNEL_PAGE_TABLE.map_page_table(page);
             } else {
                 self.map_page_table(page);

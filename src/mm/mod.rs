@@ -12,7 +12,7 @@ use crate::map_sym::*;
 pub static mut KERNEL_PAGE_TABLE : PageTable = PageTable::default();
 pub static mut KERNEL_MEMORY_SPACE: MemorySpace = MemorySpace::default();
 
-static mut KERNEL_PAGE_TABLE_INIT: bool = false;
+static mut KERNEL_VIRT_MEM_READY: bool = false;
 
 pub fn init() {
     phys_frame::init();
@@ -25,7 +25,7 @@ pub fn init() {
     unsafe { 
         KERNEL_PAGE_TABLE.activate();
     }
-    kernel_page_table_ready();
+    kerne_virtual_memory_ready();
 }
 
 fn map_kernel_memory_space() {
@@ -61,6 +61,6 @@ fn init_kernel_page_table() {
     };
 }
 
-fn kernel_page_table_ready() {
-    unsafe { KERNEL_PAGE_TABLE_INIT = true; }
+fn kerne_virtual_memory_ready() {
+    unsafe { KERNEL_VIRT_MEM_READY = true; }
 }
