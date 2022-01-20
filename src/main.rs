@@ -12,6 +12,7 @@
 #![feature(fn_align)]
 #![feature(alloc_error_handler)]
 #![feature(trace_macros)]
+#![allow(incomplete_features)]
 #![feature(const_trait_impl)]
 
 #[macro_use]
