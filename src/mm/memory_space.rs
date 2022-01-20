@@ -3,7 +3,6 @@ use xmas_elf::ElfFile;
 use super::address::*;
 use super::pte_sv39::PTEFlag;
 use core::ops::Range;
-use core::ops::RangeInclusive;
 use crate::config::*;
 use crate::trap::context::TrapContext;
 use crate::trap::{ __alltraps, __restore };
@@ -27,7 +26,6 @@ impl const Default for MemorySpace {
 }
 
 impl MemorySpace {
-    #![allow(dead_code)]
 
     fn validate_elf_header(header: xmas_elf::header::Header) -> bool {
         let magic = header.pt1.magic;
@@ -160,33 +158,6 @@ impl MemorySpace {
         }
     }
 
-    // Unused
-    /*
-    pub fn map_area_data(&mut self, area: RangeInclusive<VirtualAddr>,
-                         flags: PTEFlag, mut data: &[u8]) {
-        let (start, end) = area.into_inner();
-        log!(debug "[kernel] Maping data page 0x{:x} - 0x{:x}", start.0, end.0);
-        let start_num = PageNum::from(start);
-        let end_num = PageNum::from(end);
-        let mut offset = start.page_offset();
-        for i in start_num.0..=end_num.0 {
-            let traker = self.page_table
-                        .map(PageNum(i), flags).unwrap();
-            log!(debug "Tracker:0x{:x}", traker.0.0);
-            let len = core::cmp::min(data.len(), PAGE_SIZE);
-            let dst = unsafe {
-                core::slice::from_raw_parts_mut(
-                    (PhysAddr::from(traker.0).0 as *mut u8).offset(offset as isize) , len)
-            };
-            offset = 0;
-            log!(debug "Trying to write 0x{:x} -> 0x{:x}@0x{:x}", data.as_ptr() as usize,
-                dst.as_ptr() as usize, dst.len());
-            dst.copy_from_slice(data);
-            data = unsafe { core::slice::from_raw_parts(
-                    data.as_ptr().offset(len as isize), data.len() - len) } ;
-        }
-    }
-    */
     pub fn get_root_ppn(&self) -> PageNum {
         self.page_table.root
     }

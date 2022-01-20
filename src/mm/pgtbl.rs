@@ -35,7 +35,7 @@ impl Pgtbl {
     pub fn walk(&mut self, va: VirtualAddr, do_alloc: bool) -> &mut PTE {
         let page: PageNum = va.into();
         let mut ppn = self.root;
-        let mut pte = unsafe { ((ppn.offset(0).0) as *mut PTE).as_mut().unwrap() };
+        let mut pte;
         for level in (1..PAGE_TABLE_LEVEL).rev() {
             let pte_ptr = ppn.offset(page.vpn_block_sv39(level) * core::mem::size_of::<usize>()).0 as *mut PTE;
             pte = unsafe { pte_ptr.as_mut().unwrap() };

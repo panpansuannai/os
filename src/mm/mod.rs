@@ -1,7 +1,5 @@
 pub mod address;
 pub mod pte_sv39;
-pub mod phys_frame;
-pub mod page_table;
 pub mod pgtbl;
 pub mod kalloc;
 pub mod memory_space;
