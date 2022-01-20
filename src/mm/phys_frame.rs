@@ -1,58 +1,58 @@
+/*
 use super::address::{
     PhysAddr,
-    PhysPageNum,
+    PageNum,
 };
 use alloc::vec::Vec;
 use crate::spin::Mutex;
-use crate::map_sym::frames;
+use crate::link_syms;
+use crate::config::*;
 
-pub const PHYS_FRAME_END: usize = 0x80800000;
+static mut CURRENT: PageNum = PageNum(0);
+static mut END: PageNum = PageNum(0);
 
-static mut CURRENT: PhysPageNum = PhysPageNum(0);
-static mut END: PhysPageNum = PhysPageNum(0);
-
-static mut RECYCLE: Vec<PhysPageNum> = Vec::new();
+static mut RECYCLE: Vec<PageNum> = Vec::new();
 
 pub fn init() {
     unsafe {
-    CURRENT = PhysAddr(frames as usize + 1).ceil();
-    END = PhysAddr(PHYS_FRAME_END).floor();
+        CURRENT = PhysAddr(link_syms::frames as usize + 1).ceil();
+        END = PhysAddr(PHYS_FRAME_END).floor();
     }
 }
 
 lazy_static!{
 static ref PHYSFRAME_ALLOCATOR: Mutex<StackFrameAllocator> = 
     Mutex::new(StackFrameAllocator {
-        current: PhysPageNum(0),
-        end: PhysPageNum(0),
+        current: PageNum(0),
+        end: PageNum(0),
         recycled: Vec::new()
     });
 }
 
 pub trait FrameAllocator {
-    fn alloc(&mut self) -> Option<PhysPageNum> ;
-    fn dealloc(&mut self, ppn: PhysPageNum) -> Result<(), ()> ;
-    fn mark(&mut self, ppn: PhysPageNum) ;
+    fn alloc(&mut self) -> Option<PageNum> ;
+    fn dealloc(&mut self, ppn: PageNum) -> Result<(), ()> ;
+    fn mark(&mut self, ppn: PageNum) ;
 }
 
 
 pub struct StackFrameAllocator {
-    pub current: PhysPageNum,
-    pub end: PhysPageNum,
-    pub recycled: Vec<PhysPageNum>
+    pub current: PageNum,
+    pub end: PageNum,
+    pub recycled: Vec<PageNum>
 }
 
-pub fn alloc() -> Option<PhysPageNum> {
+pub fn alloc() -> Option<PageNum> {
     unsafe {
         if CURRENT <= END {
-            CURRENT = PhysPageNum(CURRENT.0 + 1);
+            CURRENT = PageNum(CURRENT.0 + 1);
             log!(debug "Physic frame alloc return 0x{:x}", CURRENT.0 - 1);
-            return Some(PhysPageNum(CURRENT.0 - 1))
+            return Some(PageNum(CURRENT.0 - 1))
         }
     }
     None
 }
-pub fn dealloc(ppn: PhysPageNum) -> Result<(), ()> {
+pub fn dealloc(ppn: PageNum) -> Result<(), ()> {
     unsafe {
         if ppn <= END {
             RECYCLE.push(ppn);
@@ -62,7 +62,7 @@ pub fn dealloc(ppn: PhysPageNum) -> Result<(), ()> {
         Err(())
 }
 
-pub fn mark(ppn: PhysPageNum) {
+pub fn mark(ppn: PageNum) {
     PHYSFRAME_ALLOCATOR.lock().mark(ppn)
 }
 
@@ -71,7 +71,7 @@ pub fn init() {
     log!(debug "Physic frame allocator init");
     let mut allocator = PHYSFRAME_ALLOCATOR.lock();
     allocator.current = PhysAddr(euser as usize).ceil();
-    allocator.end = PhysPageNum::from(PHYS_FRAME_END);
+    allocator.end = PageNum::from(PHYS_FRAME_END);
 }
 */
 
@@ -87,16 +87,16 @@ impl StackFrameAllocator {
 }
 
 impl FrameAllocator for StackFrameAllocator {
-    fn alloc(&mut self) -> Option<PhysPageNum> {
+    fn alloc(&mut self) -> Option<PageNum> {
         if self.current <= self.end {
-            self.current = PhysPageNum(self.current.0 + 1);
+            self.current = PageNum(self.current.0 + 1);
             log!(debug "Physic frame alloc return 0x{:x}", self.current.0 - 1);
-            return Some(PhysPageNum(self.current.0 - 1))
+            return Some(PageNum(self.current.0 - 1))
         }
         None
     }
 
-    fn dealloc(&mut self, ppn: PhysPageNum) -> Result<(), ()> {
+    fn dealloc(&mut self, ppn: PageNum) -> Result<(), ()> {
         if ppn <= self.end {
             self.recycled.push(ppn);
             return Ok(())
@@ -104,10 +104,11 @@ impl FrameAllocator for StackFrameAllocator {
         Err(())
     }
 
-    fn mark(&mut self, ppn: PhysPageNum) {
+    fn mark(&mut self, ppn: PageNum) {
         if self.current <= ppn {
             log!(debug "Physic frame mark 0x{:x}", ppn.0);
-            self.current = PhysPageNum(ppn.0 + 1);
+            self.current = PageNum(ppn.0 + 1);
         }
     }
 }
+*/

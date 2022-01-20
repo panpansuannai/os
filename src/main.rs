@@ -15,13 +15,16 @@
 #![feature(const_trait_impl)]
 
 #[macro_use]
+mod macros;
+
+#[macro_use]
 mod lang_items;
 mod sbi;
 
 #[macro_use]
 mod console;
 
-mod map_sym;
+mod link_syms;
 mod trap;
 mod entry;
 mod user;
@@ -30,6 +33,9 @@ mod batch;
 mod task;
 mod heap;
 mod mm;
+
+
+mod config;
 
 #[macro_use]
 extern crate lazy_static;
@@ -41,7 +47,7 @@ extern crate bitflags;
 
 /// Clear .bss section
 fn clear_bss() {
-    (map_sym::sbss as usize..map_sym::ebss as usize)
+    (link_syms::sbss as usize..link_syms::ebss as usize)
         .for_each(|a| {
         unsafe { (a as *mut u8).write_volatile(0) }
     });
@@ -54,14 +60,14 @@ extern "C" fn kernel_start() {
     use task::TASK_MANAGER;
     use mm::memory_space::MemorySpace;
     
-    console::turn_off_log();
+    console::turn_on_log();
     // Use new stack
     unsafe { 
         asm!("mv sp, {0}",
          in(reg) batch::KERNEL_STACK.get_top());
     }
-    mm::init();
     clear_bss();
+    mm::init();
     println!("[kernel] Clear bss");
     heap::init();
     println!("[kernel] Init heap");
@@ -83,7 +89,7 @@ extern "C" fn kernel_start() {
     let context0 = TrapContext::app_init_context(
         virtual_space.entry(), virtual_space.get_stack(),
         virtual_space.get_root_ppn().0 | 0x8000000000000000, 
-        unsafe { mm::KERNEL_PAGE_TABLE.root_ppn.0 | 0x8000000000000000 } ,
+        unsafe { mm::KERNEL_PAGE_TABLE.root.0 | 0x8000000000000000 } ,
         batch::KERNEL_STACK.get_top(), trap::trap_handler as usize);
 
     virtual_space.map_context(&context0);

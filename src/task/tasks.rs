@@ -52,10 +52,10 @@ impl TaskControlBlock {
     }
 
     pub fn get_context(&mut self) -> &mut TrapContext {
+        let ppn = self.memory_space.page_table.walk(MemorySpace::context_addr(), false).ppn();
+        let pa: PhysAddr = ppn.into();
         unsafe {
-            &mut *(Into::<PhysAddr>::into(self.memory_space.page_table
-            .find_pte(VirtualPageNum::from(MemorySpace::context_addr()))
-            .unwrap().ppn()).0 as *const TrapContext as *mut TrapContext)
+        (pa.0 as *const TrapContext as *mut TrapContext).as_mut().unwrap()
         }
     }
 

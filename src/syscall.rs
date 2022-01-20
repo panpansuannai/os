@@ -1,4 +1,4 @@
-use crate::mm::address::*;
+use crate::{mm::address::*, console::print};
 pub const SYS_WRITE: usize = 64;
 pub const SYS_EXIT: usize = 93;
 pub const SYS_YIELD: usize = 124;
