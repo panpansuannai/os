@@ -5,6 +5,7 @@ use super::pte_sv39::PTEFlag;
 use core::ops::Range;
 use crate::config::*;
 use crate::trap::context::TrapContext;
+use crate::process::TrapFrame;
 use crate::trap::{ __alltraps, __restore };
 use super::pgtbl::Pgtbl;
 use super::kalloc::KALLOCATOR;
@@ -68,7 +69,7 @@ impl MemorySpace {
     }
 
     // Return (alltraps, restore)
-    pub fn trampoline_entry(&self) -> (usize, usize) {
+    pub fn trampoline_entry() -> (usize, usize) {
         let alltraps = Into::<VirtualAddr>::into(Self::trampoline_page());
         let restore = alltraps.offset((__restore as usize  - __alltraps as usize) as isize);
         (alltraps.0, restore.0)
@@ -89,6 +90,11 @@ impl MemorySpace {
                                       core::mem::size_of::<TrapContext>())
         });
         pn
+    }
+
+    pub fn map_trapframe(&mut self, trapframe: *const TrapFrame) {
+        self.page_table.map(Self::context_page().into(), PhysAddr(trapframe as usize).into(),
+                            PTEFlag::R|PTEFlag::W|PTEFlag::V);
     }
 
     // FIXME: len should be indicated by dst

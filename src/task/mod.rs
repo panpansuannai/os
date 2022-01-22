@@ -1,98 +1,64 @@
-mod tasks;
-use tasks::{TaskControlBlock, TaskStatus};
+use spin::Mutex;
 use crate::mm::memory_space::MemorySpace;
+use crate::process::cpu::{current_hart, current_hart_set_pid};
+use crate::process::{PcbState, Pcb, Pid, restore_trapframe};
 
-use core::cell::RefCell;
-
-pub struct TaskManager {
-    inner: RefCell<TaskManagerInner>
+lazy_static!{
+    pub static ref TASKMANAGER: Mutex<TaskManagerInner> = Mutex::new(TaskManagerInner {
+            pcbs: [None; crate::user::APP_NUM],
+    });
 }
 
 pub struct TaskManagerInner {
-    tasks: [TaskControlBlock; crate::user::APP_NUM],
-    current_task: usize
+    pcbs: [Option<Mutex<Pcb<'static>>>; crate::user::APP_NUM],
 }
 
-#[repr(C)]
-pub struct KernelTask {
-    pub stack: usize,
-    pub satp: usize,
-    pub user_stack: usize
-}
-
-unsafe impl Sync for TaskManager {}
-lazy_static!{
-pub static ref TASK_MANAGER: TaskManager = TaskManager {
-    inner: RefCell::new({
-        TaskManagerInner {
-            tasks: [TaskControlBlock::empty_block(); crate::user::APP_NUM],
-            current_task: 0
-        }
-    })
-};
-}
-
-impl TaskManager {
-    pub fn set_current_task_ready(&self) {
-        let mut inner = self.inner.borrow_mut();
-        let current = inner.current_task;
-        inner.tasks[current].set_status(TaskStatus::Ready);
-    }
-    
-    pub fn get_current_task(&self) -> TaskControlBlock{
-        let inner = self.inner.borrow_mut();
-        let current = inner.current_task;
-        inner.tasks[current]
-
-    }
-
-    pub fn update_current_task(&self, tcb: TaskControlBlock) {
-        let mut inner = self.inner.borrow_mut();
-        let current = inner.current_task;
-        inner.tasks[current] = tcb;
-        
-    }
-
-    pub fn start_next_task(&self) {
-        let mut inner = self.inner.borrow_mut();
-        let current = inner.current_task;
-        let mut next = (current + 1) % inner.tasks.len();
-        loop {
-            if let TaskStatus::Ready = inner.tasks[next].get_status() {
+impl TaskManagerInner {
+    pub fn load_pcb(&mut self, memory_space: MemorySpace) {
+        // Fixme: when ran out of pcbs
+        let pcb = Mutex::new(Pcb::new(memory_space));
+        pcb.lock().set_state(PcbState::Ready);
+        for (i, p) in self.pcbs.iter_mut().enumerate() {
+            if let None = p {
+                pcb.lock().pid = Some(i);
+                *p = Some(pcb);
                 break;
             }
-            if next == current {
-                panic!("No tasks");
-            }
-            next = (next + 1) % inner.tasks.len();
         }
-        println!("[kernel] Start next task:{}", next);
-        inner.tasks[next].set_status(TaskStatus::Running);
-        inner.current_task = next;
-        let cx_ptr = inner.tasks[next].get_cx_ptr();
-        let satp = inner.tasks[next].get_satp();
-        drop(inner);
-        crate::trap::_restore(cx_ptr, satp);
     }
 
-    pub fn load_task(&self, memory_space: MemorySpace) {
-        //println!("[kernel] Loading task for TrapContext: 0x{:x} -> sepc: 0x{:x}",
-                 //cx as *const TrapContext as usize, cx.sepc);
-        let mut inner = self.inner.borrow_mut();
-        let mut empty = 0;
-        loop {
-            if let TaskStatus::UnInit = inner.tasks[empty].get_status() {
+    pub fn get_pcb(&self, pid: Pid) -> &Mutex<Pcb<'static>> {
+        match self.pcbs[pid] {
+            Some(ref p) => {
+                p
+            },
+            None => {
+                panic!("invalid pid");
+            }
+        }
+    }
+    pub fn current_pcb(&self) -> &Mutex<Pcb<'static>> {
+        let cpu = current_hart();
+        self.get_pcb(cpu.pid.unwrap())
+    }
+}
+
+pub fn schedule_pcb() -> ! {
+    let mut satp = None;
+    for i in TASKMANAGER.lock().pcbs.iter() {
+        if let Some(p) = i {
+            let mut pcb = p.lock();
+            if let PcbState::Ready = pcb.state() {
+                pcb.set_state(PcbState::Running);
+                current_hart_set_pid(pcb.pid.unwrap());
+                satp = Some(pcb.trapframe["satp"]);
                 break;
             }
-            empty = (empty + 1) % inner.tasks.len();
         }
-        inner.tasks[empty] = TaskControlBlock::new(TaskStatus::Ready, memory_space);
     }
-
-    pub fn exit_current_task(&self){
-        let mut inner = self.inner.borrow_mut();
-        println!("[kernel] Current task {} exited", inner.current_task);
-        let current = inner.current_task;
-        inner.tasks[current].set_status(TaskStatus::Exit);
+    if let Some(satp) = satp {
+        restore_trapframe(satp);
+    } else {
+        panic!("No ready pcb");
     }
 }

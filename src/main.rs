@@ -15,6 +15,8 @@
 #![allow(incomplete_features)]
 #![feature(const_trait_impl)]
 
+use crate::process::cpu::init_hart;
+
 #[macro_use]
 mod macros;
 
@@ -34,6 +36,7 @@ mod batch;
 mod task;
 mod heap;
 mod mm;
+mod process;
 
 
 mod config;
@@ -57,8 +60,7 @@ fn clear_bss() {
 // [no_mangle] Turn off Rust's name mangling
 #[no_mangle]
 extern "C" fn kernel_start() {
-    use trap::context::TrapContext;
-    use task::TASK_MANAGER;
+    use task::{ schedule_pcb, TASKMANAGER };
     use mm::memory_space::MemorySpace;
     
     console::turn_on_log();
@@ -75,6 +77,7 @@ extern "C" fn kernel_start() {
     trap::init();
     println!("[kernel] Init trap");
 
+    init_hart();
     // Run user space application
     println!("[kernel] Load user address space");
     let mut virtual_space = unsafe { 
@@ -87,18 +90,20 @@ extern "C" fn kernel_start() {
 
     println!("[kernel] Load user address space");
 
+    /*
     let context0 = TrapContext::app_init_context(
         virtual_space.entry(), virtual_space.get_stack(),
         virtual_space.get_root_ppn().0 | 0x8000000000000000, 
         unsafe { mm::KERNEL_PAGE_TABLE.root.0 | 0x8000000000000000 } ,
         batch::KERNEL_STACK.get_top(), trap::trap_handler as usize);
+    */
 
-    virtual_space.map_context(&context0);
-
+    // virtual_space.map_context(&context0);
     println!("[kernle] Loading apps as tasks");
-    TASK_MANAGER.load_task(virtual_space);
-    trap::enable_timer_interupt();
-    trap::time::set_next_trigger();
-    TASK_MANAGER.start_next_task();
-    panic!("Shut down"); 
+    TASKMANAGER.lock().load_pcb(virtual_space);
+    // TASK_MANAGER.load_task(virtual_space);
+    // trap::enable_timer_interupt();
+    // trap::time::set_next_trigger();
+    // TASK_MANAGER.start_next_task();
+    schedule_pcb();
 }
