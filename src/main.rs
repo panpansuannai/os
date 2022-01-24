@@ -38,7 +38,6 @@ mod heap;
 mod mm;
 mod process;
 
-
 mod config;
 
 #[macro_use]
@@ -90,20 +89,9 @@ extern "C" fn kernel_start() {
 
     println!("[kernel] Load user address space");
 
-    /*
-    let context0 = TrapContext::app_init_context(
-        virtual_space.entry(), virtual_space.get_stack(),
-        virtual_space.get_root_ppn().0 | 0x8000000000000000, 
-        unsafe { mm::KERNEL_PAGE_TABLE.root.0 | 0x8000000000000000 } ,
-        batch::KERNEL_STACK.get_top(), trap::trap_handler as usize);
-    */
-
-    // virtual_space.map_context(&context0);
     println!("[kernle] Loading apps as tasks");
     TASKMANAGER.lock().load_pcb(virtual_space);
-    // TASK_MANAGER.load_task(virtual_space);
-    // trap::enable_timer_interupt();
-    // trap::time::set_next_trigger();
-    // TASK_MANAGER.start_next_task();
+    trap::enable_timer_interupt();
+    trap::time::set_next_trigger();
     schedule_pcb();
 }

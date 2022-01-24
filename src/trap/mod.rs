@@ -1,8 +1,6 @@
 pub mod context;
 pub mod time;
 
-use core::borrow::{BorrowMut, Borrow};
-
 use riscv::register::{
     mtvec::TrapMode,
     stvec,
@@ -15,10 +13,10 @@ use riscv::register::{
     stval,
     sie,
 };
+use spin::MutexGuard;
 
 use crate::mm::memory_space::MemorySpace;
 use crate::task::{schedule_pcb, TASKMANAGER};
-use crate::process::cpu::*;
 use crate::process::TrapFrame;
 
 extern "C" { pub fn __alltraps(); }
@@ -52,30 +50,19 @@ pub fn enable_timer_interupt() {
 #[no_mangle]
 pub extern "C" fn trap_handler() -> ! {
     println!("[kernel] In trap handler");
-    let a = TASKMANAGER.lock();
-    let mut b = a.current_pcb();
-    let c = b.borrow_mut().lock();
     // Fixme: Don't skip the reference lifetime checker;
-    let cx = unsafe {c.trapframe().as_mut().unwrap()};
-    // Fixme: ugly
-    unsafe {
-        TASKMANAGER.force_unlock();
-        b.force_unlock();
-    }
+    let cx = unsafe {TASKMANAGER.lock().current_pcb().trapframe().as_mut().unwrap()};
     let scause = scause::read();
     let stval = stval::read();
     match scause.cause() {
         Trap::Exception(Exception::UserEnvCall) => {
             cx["sepc"] += 4;
-            let mut p = cx.general_reg[10];
-            if cx.general_reg[17] == crate::syscall::SYS_YIELD {
+            let mut p = cx["a0"];
+            if cx["a7"] == crate::syscall::SYS_YIELD {
                 p = cx as *mut TrapFrame as usize;
             }
-            cx.general_reg[10] =
-                crate::syscall::syscall(cx.general_reg[17],
-                        [p,
-                        cx.general_reg[11],
-                        cx.general_reg[12]]) as usize;
+            cx["a0"] = crate::syscall::syscall(cx["a7"],
+                    [p, cx["a1"], cx["a2"]]) as usize;
         }
         Trap::Exception(Exception::StoreFault) |
         Trap::Exception(Exception::StorePageFault) => {

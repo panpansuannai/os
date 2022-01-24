@@ -14,6 +14,7 @@ lazy_static!{
     static ref HARTS: Mutex<Vec<Cpu>> = Mutex::new(Vec::new());
 }
 
+
 pub fn init_hart() {
     HARTS.lock().push(Cpu {
         hartid: hartid(),

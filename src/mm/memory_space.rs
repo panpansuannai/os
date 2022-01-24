@@ -10,7 +10,6 @@ use crate::trap::{ __alltraps, __restore };
 use super::pgtbl::Pgtbl;
 use super::kalloc::KALLOCATOR;
 
-
 #[derive(Copy, Clone)]
 pub struct MemorySpace {
     pub page_table: Pgtbl,

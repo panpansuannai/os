@@ -1,7 +1,12 @@
 use crate::{mm::address::*, console::print, process::cpu::current_hart, task::{schedule_pcb, TASKMANAGER}};
+use spin::MutexGuard;
+use crate::process::Pcb;
+
 pub const SYS_WRITE: usize = 64;
 pub const SYS_EXIT: usize = 93;
 pub const SYS_YIELD: usize = 124;
+
+type PcbGuard<'a> = MutexGuard<'a, Pcb<'a>>;
 
 pub fn syscall(id: usize, param: [usize; 3]) -> isize{
     match id {
@@ -25,7 +30,8 @@ fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     if TASKMANAGER.is_locked() {
         panic!("sys_write still locking");
     }
-    TASKMANAGER.lock().current_pcb().lock().memory_space.copy_virtual_address(VirtualAddr(buf as usize), len, buffer.as_mut_slice());
+    TASKMANAGER.lock().current_pcb().memory_space
+        .copy_virtual_address(VirtualAddr(buf as usize), len, buffer.as_mut_slice());
     const FD_STDOUT: usize = 1;
     match fd {
         FD_STDOUT => {
@@ -44,12 +50,12 @@ fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
 
 fn sys_exit(xstate: usize) -> ! {
     crate::println!("[kernel] Application exit with code {}", xstate);
-    TASKMANAGER.lock().current_pcb().lock().exit();
+    TASKMANAGER.lock().current_pcb().exit();
     schedule_pcb();
 }
 
 fn sys_yield(_: usize) -> isize {
     println!("[kernel] syscall Yield");
-    TASKMANAGER.lock().current_pcb().lock().set_state(crate::process::PcbState::Ready);
+    TASKMANAGER.lock().current_pcb().set_state(crate::process::PcbState::Ready);
     0
 }

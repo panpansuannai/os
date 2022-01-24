@@ -2,6 +2,7 @@ pub mod trapframe;
 pub mod cpu;
 
 use crate::mm::address::*;
+use core::sync::atomic::{self, AtomicBool};
 pub use trapframe::TrapFrame;
 
 use crate::mm::memory_space::MemorySpace;
@@ -46,6 +47,7 @@ impl<'a> Pcb<'a> {
         pcb
     }
 
+
     pub fn state(&self) -> PcbState {
         self.state
     }
@@ -56,8 +58,8 @@ impl<'a> Pcb<'a> {
         old_state
     }
 
-    pub fn trapframe(&self) -> *mut TrapFrame {
-        self.trapframe as *const TrapFrame as *mut TrapFrame
+    pub fn trapframe(&mut self) -> *mut TrapFrame {
+        self.trapframe as *mut TrapFrame
     }
 
     pub fn exit(&mut self) {
