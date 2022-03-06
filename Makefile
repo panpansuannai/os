@@ -4,7 +4,7 @@ run: build
 	qemu-system-riscv64 \
 	-machine virt \
 	-nographic \
-	-bios ./bootloader/rustsbi-qemu.bin \
+	-bios ./bootloader/fw_jump.bin \
 	-device loader,file=target/riscv64gc-unknown-none-elf/debug/os,addr=0x80200000
 
 gdb:
